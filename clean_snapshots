@@ -1,0 +1,118 @@
+#!/usr/bin/env python
+# ebs-tools, a set of tools to manage EBS volumes and snapshots
+#
+# Copyright (C) 2014 Julio Gonzalez Gil <julio@juliogonzalez.es>
+#
+# This file is part of ebs-tools.
+#
+# ebs-tools is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ebs-tools is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ebs-tools.  If not, see <http://www.gnu.org/licenses/>.
+
+
+from lib.check import boolean_posint_or_default, boolean_or_default
+from lib.check import posint_or_default, print_usage_error
+from lib.exceptions import OptionNotPresent
+from lib.messages import print_error, print_info, print_ok, print_warning
+from lib.tasks import task_clean_snapshots_ebs_id
+from optparse import OptionParser
+from os import path
+
+
+def parse_options():
+    """ Parse and validate options
+    Args:
+        None
+    Returns:
+        A dictionary with all the options
+    Raises:
+        OptionNotPresent: If a mandatory option was not present
+    """
+    usage = "%prog <arguments>"
+    description = ('Tool to clean old EBS snapshots')
+    parser = OptionParser(usage=usage, description=description)
+    parser.add_option('--volume-id', action='store',
+                      help='EBS volume-id')
+    parser.add_option('--region', action='store',
+                      help='AWS Region where the volume is located')
+    parser.add_option('--hourly', action='store',
+                      help='Number of hourly backups to save [Optional,'
+                           ' default is 0]')
+    parser.add_option('--daily', action='store',
+                      help='Number of daily backups to save [Optional,'
+                           ' is 7]')
+    parser.add_option('--weekly', action='store',
+                      help='Number of weekly backups to save [Optional,'
+                           ' default is 4]')
+    parser.add_option('--monthly', action='store',
+                      help='True or False, to save or discard monthly backups'
+                           ' [Optional, default is True, save]')
+    parser.add_option('--dry', action='store_false',
+                      help='Just simulate at AWS [Optional]')
+    parser.add_option('--test', action='store_false',
+                      help='Use it to run a test without real EBS snapshots'
+                           ' [Optional]')
+    parser.add_option('--test-number', action='store',
+                      help='Number of simulated EBS snapshots for the test'
+                           ' [Optional, default is 100]')
+    (options, args) = parser.parse_args()
+
+    # Check for test parameters
+    if options.test is None:
+        options.test = False
+    else:
+        options.test = True
+    if options.dry is None:
+        options.dry = False
+    else:
+        options.dry = True
+    if options.test and options.dry:
+        parser.error("--test and --dry are mutually exclusive")
+    if (options.test is True) and (options.test_number is None):
+        options.test_number = 100
+    elif (options.test is True) and (options.test_number is not None):
+        options.test_number = posint_or_default('test_number',
+                                                options.test_number,
+                                                100)
+    # Mandatory parameters, unless test option was selected
+    if (options.volume_id is None) and (options.test is False):
+        raise OptionNotPresent('volume-id')
+    if (options.region is None) and (options.test is False):
+        raise OptionNotPresent('region')
+    # Optional parameters
+    options.hourly = posint_or_default('hourly', options.hourly, 0)
+    options.daily = posint_or_default('daily', options.daily, 7)
+    options.weekly = posint_or_default('weekly', options.weekly, 4)
+    # Small exception: 0 means False (delete all months)
+    if options.monthly == '0':
+        options.monthly = False
+    options.monthly = boolean_posint_or_default('monthly', options.monthly,
+                                                True)
+    return(options)
+
+
+def main():
+    try:
+        args = parse_options()
+    except Exception as e:
+        print_usage_error(path.basename(__file__), e)
+        exit(1)
+    try:
+        task_clean_snapshots_ebs_id(args.volume_id, args.region, args.hourly,
+                                    args.daily, args.weekly, args.monthly,
+                                    args.dry, args.test, args.test_number)
+    except Exception as e:
+        print_error(e)
+        exit(2)
+
+if __name__ == "__main__":
+    main()

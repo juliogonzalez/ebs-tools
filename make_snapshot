@@ -1,0 +1,82 @@
+#!/usr/bin/env python
+# ebs-tools, a set of tools to manage EBS volumes and snapshots
+#
+# Copyright (C) 2014 Julio Gonzalez Gil <julio@juliogonzalez.es>
+#
+# This file is part of ebs-tools.
+#
+# ebs-tools is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ebs-tools is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ebs-tools.  If not, see <http://www.gnu.org/licenses/>.
+
+
+from lib.check import print_usage_error
+from lib.exceptions import OptionNotPresent
+from lib.messages import print_error, print_info, print_ok, print_warning
+from lib.tasks import task_create_snapshot_ebs_id
+from optparse import OptionParser
+from os import path
+
+
+def parse_options():
+    """ Parse and validate options
+    Args:
+        None
+    Returns:
+        A dictionary with all the options
+    Raises:
+        OptionNotPresent: If a mandatory option was not present
+    """
+    usage = "%prog <arguments>"
+    description = ('Tool to create EBS snapshots')
+    parser = OptionParser(usage=usage, description=description)
+    parser.add_option('--volume-id', action='store',
+                      help='EBS volume-id')
+    parser.add_option('--region', action='store',
+                      help='AWS Region where the volume is located')
+    parser.add_option('--name', action='store',
+                      help='Name for the new snapshot [Optional, default will'
+                           ' be the volume name if available, or the volume ID'
+                           ' otherwise]')
+    parser.add_option('--description', action='store',
+                      help='Description for the new snapshot [Optional,'
+                           ' default will be instance name/ID and attachment'
+                           ' info]')
+    parser.add_option('--dry', action='store_false',
+                      help='Simulate functionality at AWS')
+    (options, args) = parser.parse_args()
+    if options.volume_id is None:
+        raise OptionNotPresent('volume-id')
+    if options.region is None:
+        raise OptionNotPresent('region')
+    if options.dry is None:
+        options.dry = False
+    else:
+        options.dry = True
+    return(options)
+
+
+def main():
+    try:
+        args = parse_options()
+    except Exception as e:
+        print_usage_error(path.basename(__file__), e)
+        exit(1)
+    try:
+        task_create_snapshot_ebs_id(args.volume_id, args.region, args.dry,
+                                    args.name, args.description)
+    except Exception as e:
+        print_error(e)
+        exit(2)
+
+if __name__ == "__main__":
+    main()

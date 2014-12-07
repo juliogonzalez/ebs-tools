@@ -1,0 +1,97 @@
+#!/usr/bin/env python
+# ebs-tools, a set of tools to manage EBS volumes and snapshots
+#
+# Copyright (C) 2014 Julio Gonzalez Gil <julio@juliogonzalez.es>
+#
+# This file is part of ebs-tools.
+#
+# ebs-tools is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ebs-tools is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ebs-tools.  If not, see <http://www.gnu.org/licenses/>.
+
+
+from lib.check import posint_or_default, print_usage_error
+from lib.exceptions import OptionNotPresent, OptionsAlternativesNotPresent
+from lib.messages import print_error, print_info, print_ok, print_warning
+from lib.tasks import migrate_volumes
+from optparse import OptionParser
+from os import path
+
+
+def parse_options():
+    """ Parse and validate options
+    Args:
+        None
+    Returns:
+        A dictionary with all the options
+    Raises:
+        OptionNotPresent: If a mandatory option was not present
+        OptionsAlternativesNotPresent: If alternatives and mandatory options
+                                       were not present
+    """
+    usage = "%prog <arguments>"
+    description = ('Tool to change types of EBS volumes attached to an EC2 '
+                   'instance')
+    parser = OptionParser(usage=usage, description=description)
+    parser.add_option('--region', action='store',
+                      help='AWS Region where the EC2 instance is located')
+
+    parser.add_option('--instancename', action='store',
+                      help='EC2 Instance name where the volumes are attached')
+    parser.add_option('--instanceid', action='store',
+                      help='EC2 Instance id  where the volumes are attached')
+    parser.add_option('--devices', action='store',
+                      help='Attached devices to migrate. Use regular'
+                           'expressions. For example /dev/sd[b-c] to catch'
+                           '/dev/sdb* and /dev/sdc*')
+    parser.add_option('--vtype', action='store',
+                      help='New volume type. <standard|gp2|io1>')
+    parser.add_option('--piops', action='store',
+                      help='Number of PIOPS (when --vtype=io1 was specified)')
+    parser.add_option('--dry', action='store_false',
+                      help='Just simulate at AWS [Optional]')
+    (options, args) = parser.parse_args()
+    if options.dry is None:
+        options.dry = False
+    else:
+        options.dry = True
+    # Check for test parameters
+    if options.region is None:
+        raise OptionNotPresent('region')
+    if options.instancename is None and options.instanceid is None:
+        raise OptionsAlternativesNotPresent('instancename', 'instanceid')
+    if options.devices is None:
+        raise OptionNotPresent('devices')
+    if options.vtype is None:
+        raise OptionNotPresent('vtype')
+    if options.vtype == 'io1' and options.piops is None:
+        raise OptionNotPresent('piops')
+    if options.vtype == 'io1' and options.piops is not None:
+        options.pios = posint_or_default('piops', options.piops)
+    return(options)
+
+
+def main():
+    try:
+        args = parse_options()
+    except Exception as e:
+        print_usage_error(path.basename(__file__), e)
+        exit(1)
+    try:
+        migrate_volumes(args.region, args.dry, args.devices, args.vtype,
+                        args.piops, args.instanceid, args.instancename)
+    except Exception as e:
+        print_error(e)
+        exit(2)
+
+if __name__ == "__main__":
+    main()
