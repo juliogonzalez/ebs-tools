@@ -25,15 +25,62 @@ from instances import start_instance_and_wait, stop_instance_and_wait
 from messages import print_error, print_info, print_ok, print_special
 from messages import print_warning
 from snapshots import clean_snapshots_by_volume_id
-from snapshots import create_snapshot_by_volume_id
+from snapshots import create_snapshot_by_volume_id, snapshot_wait_creation
 from threading import currentThread, enumerate, Thread
 from volumes import attach_volume, check_iops_ratio, create_volume
-from volumes import delete_volume, detach_volume, getvolumes_from_instance
+from volumes import delete_volume, detach_volume
+from volumes import get_volumes_from_instance_by_device
+from volumes import get_volumes_from_instance_by_name
 
 
-def task_clean_snapshots_ebs_id(volume_id, region, hourly_backups,
-                                daily_backups, weekly_backups, monthly_backups,
-                                dry, test, test_number):
+def task_clean_snapshots_ec2(region, instance_id=None, instance_name=None,
+                             devices=None, volume_name=None,
+                             hourly_backups=0, daily_backups=7,
+                             weekly_backups=0, monthly_backups=4, dry=True,
+                             test=False, test_number=100):
+    """ Clean snapshots for volumes attached to an EC2 instance, by device or
+        by tag name
+
+        Args:
+            instance_id: A string with the EC2 instance-id
+            instance_name: A string with the EC2 instance name
+            devices: A string with a regex to look for volumes by device
+            volumename: A string with a regex to look for volumes by name
+            region: A string with the AWS region where the instance is
+            hourly_backups: An integer with the number of hourly backups to
+                            save
+            daily_backups: An integer with the number of daily backups to save
+            weekly_backups: An integer with the number of weekly backups to
+                            save
+            monthly_backups: An integer with the number of monthly backups to
+                             save, or True to save all monthly backups, or
+                             False to delete all monthly backups.
+            dry: A boolean stating if the action is simulated or not
+            test: run the function with testing snapshots (not real)
+            test_number: the number of testing snapshots
+    """
+    volumes = []
+    if instance_name is not None:
+        instance = get_instance_by_name(instance_name, region)
+    if instance_id is not None:
+        instance = get_instance_by_id(instance_id, region)
+    if devices is not None:
+        volumes = get_volumes_from_instance_by_device(instance.id, devices,
+                                                      region)
+    if volume_name is not None:
+        volumes = get_volumes_from_instance_by_name(instance.id, volume_name,
+                                                    region)
+    for volume in volumes:
+        task_clean_snapshots_ebs_id(volume.id, region, hourly_backups,
+                                    daily_backups, weekly_backups,
+                                    monthly_backups, dry, test,
+                                    test_number)
+
+
+def task_clean_snapshots_ebs_id(volume_id, region, hourly_backups=0,
+                                daily_backups=7, weekly_backups=0,
+                                monthly_backups=4, dry=True, test=False,
+                                test_number=100):
     """ Clean EBS Snapshots for a given EBS ID
 
         Args:
@@ -78,6 +125,31 @@ def task_clean_snapshots_ebs_id(volume_id, region, hourly_backups,
                 print_error("It was not possible to delete snapshot %s, "
                             "error: %s" % (snapshot['snapshot_id'],
                                            snapshot['error']))
+    print_ok("Unneeded snapshots for %s deleted" % volume_id)
+
+
+class Snapshot(Thread):
+    """ Object to Perform parallel snapshots
+
+    Properties:
+        volume_id: A string with the EBS volume-id to create the snapshot
+        region: A string with the AWS region where the volume is
+        dry: A boolean stating if the action is simulated or not
+        name: A string with the name for the new snapshot (optional)
+        description: A string with the value for the description
+    """
+
+    def __init__(self, volume_id, region, dry, volume_name, description):
+        Thread.__init__(self)
+        self.volume_id = volume_id
+        self.region = region
+        self.dry = dry
+        self.volume_name = volume_name
+        self.description = description
+
+    def run(self):
+        task_create_snapshot_ebs_id(self.volume_id, self.region, self.dry,
+                                    self.volume_name, self.description)
 
 
 def task_create_snapshot_ebs_id(volume_id, region, dry, name=None,
@@ -99,8 +171,8 @@ def task_create_snapshot_ebs_id(volume_id, region, dry, name=None,
         drytext = ""
     print_info("%sCreating snapshot for volume-id %s, description: %s..."
                % (drytext, volume_id, description))
-    snapshot = create_snapshot_by_volume_id(volume_id, region, dry, name=None,
-                                            description=None)
+    snapshot = create_snapshot_by_volume_id(volume_id, region, dry, name,
+                                            description)
     if dry is True:
         snapshot_id = None
         print_ok("%sSnapshot was not created because dry flag is "
@@ -109,6 +181,60 @@ def task_create_snapshot_ebs_id(volume_id, region, dry, name=None,
         snapshot_id = snapshot.id
         print_ok("Snapshot %s was created" % snapshot_id)
     return(snapshot_id)
+
+
+def task_create_snapshots_ec2(region, instance_id=None, instance_name=None,
+                              parallel=False, dry=True, devices=None,
+                              volume_name=None, name=None, description=None):
+    """ Make a snapshots for volumes attached to an EC2 instance, by device or
+        by tag name
+
+    Args:
+        instance_id: A string with the EC2 instance-id
+        instance_name: A string with the EC2 instance name
+        parallel: A boolean (True to create snapshots in parallel)
+        region: A string with the AWS region where the volume is
+        dry: A boolean stating if the action is simulated or not
+        devices: A string with a regex to look for volumes by device
+        volumename: A string with a regex to look for volumes by name
+        name: A string with the name for the new snapshot (optional)
+        description: A string with the value for the new tag
+    Returns:
+        A string with the snapshots' ID or None for a dry run
+    """
+    volumes = []
+    if instance_name is not None:
+        instance = get_instance_by_name(instance_name, region)
+    if instance_id is not None:
+        instance = get_instance_by_id(instance_id, region)
+    if devices is not None:
+        volumes = get_volumes_from_instance_by_device(instance.id, devices,
+                                                      region)
+    if volume_name is not None:
+        volumes = get_volumes_from_instance_by_name(instance.id, volume_name,
+                                                    region)
+    if parallel:
+        print_special("===================================")
+        print_special("     STARTING PARALLEL TASKS       ")
+        print_special("===================================")
+    for volume in volumes:
+        if parallel:
+            task = Snapshot(volume.id, region, dry, name, description)
+            task.start()
+        else:
+            task_create_snapshot_ebs_id(volume.id, region, dry, name,
+                                        description)
+    # Main thread
+    if parallel:
+        main_thread = currentThread()
+        for thread in enumerate():
+            # Prevent deadlock
+            if thread is main_thread:
+                continue
+            thread.join()
+        print_special("===================================")
+        print_special("     FINISHED PARALLEL TASKS       ")
+        print_special("===================================")
 
 
 class VolumeMigrate(Thread):
@@ -159,6 +285,10 @@ class VolumeMigrate(Thread):
         snapshot_id = task_create_snapshot_ebs_id(self.volume.id, self.region,
                                                   self.dry,
                                                   description=description)
+        if self.dry is False:
+            print_info("%s%sWaiting for snapshot %s to be available..."
+                       % (drytext, idtext, snapshot_id))
+            snapshot_wait_creation(snapshot_id, self.region)
         # Detach volume
         print_info("%s%sDettaching volume %s..." % (drytext, idtext,
                                                     self.volume.id))
@@ -277,7 +407,7 @@ def migrate_volumes(region, dry, devices, vtype, newpiops=None,
         instance = get_instance_by_name(instance_name, region)
     else:
         instance = get_instance_by_id(instance_id, region)
-    volumes = getvolumes_from_instance(instance.id, devices, region)
+    volumes = get_volumes_from_instance_by_device(instance.id, devices, region)
     check_migration_logic(volumes, vtype, newpiops, region)
     print_info
     print_info("%sStopping instance..." % drytext)

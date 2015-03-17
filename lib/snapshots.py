@@ -26,6 +26,7 @@ from exceptions import NoSnapshotsForVolume, SnapshotCreateError
 from exceptions import SnapshotCreateTagError, SnapshotsFetchError
 from exceptions import VolumeFetchError
 from instances import get_instance_by_id
+from time import sleep
 
 
 def get_snapshot_by_id(snapshot_id, region):
@@ -107,7 +108,7 @@ def create_snapshot_by_volume_id(volume_id, region, dry, name=None,
         region: A string with the AWS region where the volume is
         dry: A boolean stating if the action is simulated or not
         name: A string with the name for the new snapshot (optional)
-        description: A string with the value for the new tag
+        description: A string with the value for the description
     Returns:
         A boto.ec2.snapshot.Snapshot object with the created snapshot or
         None if this was a dry run
@@ -152,6 +153,25 @@ def create_snapshot_by_volume_id(volume_id, region, dry, name=None,
         return(snapshot)
     else:
         return(None)
+
+
+def snapshot_wait_creation(snapshot_id, region):
+    """ Wait till a snapshot is finished
+
+    Args:
+        volume_id: A string with the snapshot-id
+        region: A string with the AWS region where the volume is
+    Raises:
+        SnapshotCreateError: If there was an error creating the snapshot
+    """
+    conn = ec2conn(region)
+    snapshot = conn.get_all_snapshots(snapshot_id)[0]
+    try:
+        while snapshot.status != "completed":
+            sleep(60)
+            snapshot.update(validate=True)
+    except Exception as e:
+        raise SnapshotCreateError(e)
 
 
 class SavedSnapshot(object):

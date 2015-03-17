@@ -21,9 +21,9 @@
 
 from lib.check import boolean_posint_or_default, boolean_or_default
 from lib.check import posint_or_default, print_usage_error
-from lib.exceptions import OptionNotPresent
+from lib.exceptions import OptionNotPresent, OptionsAlternativesNotPresent
 from lib.messages import print_error, print_info, print_ok, print_warning
-from lib.tasks import task_clean_snapshots_ebs_id
+from lib.tasks import task_clean_snapshots_ec2
 from optparse import OptionParser
 from os import path
 
@@ -38,10 +38,21 @@ def parse_options():
         OptionNotPresent: If a mandatory option was not present
     """
     usage = "%prog <arguments>"
-    description = ('Tool to clean old EBS snapshots for a volume')
+    description = ('Tool to clean old EBS snapshots for volumes attached to '
+                   'an instance')
     parser = OptionParser(usage=usage, description=description)
-    parser.add_option('--volume-id', action='store',
-                      help='EBS volume-id')
+    parser.add_option('--instance-id', action='store',
+                      help='EC2 instance-id')
+    parser.add_option('--instance_name', action='store',
+                      help='EC2 instance name')
+    parser.add_option('--devices', action='store',
+                      help='Attached devices to snapshot. Use regular'
+                           'expressions. For example /dev/sd[b-c] to catch'
+                           '/dev/sdb* and /dev/sdc*')
+    parser.add_option('--volume_name', action='store',
+                      help='Regular expression to select volumes to snapshot '
+                           'by name. For example volume1 to catch'
+                           'volume1*')
     parser.add_option('--region', action='store',
                       help='AWS Region where the volume is located')
     parser.add_option('--hourly', action='store',
@@ -84,10 +95,13 @@ def parse_options():
                                                 options.test_number,
                                                 100)
     # Mandatory parameters, unless test option was selected
-    if (options.volume_id is None) and (options.test is False):
-        raise OptionNotPresent('volume-id')
-    if (options.region is None) and (options.test is False):
-        raise OptionNotPresent('region')
+    if options.test is False:
+        if options.instance_id is None and options.instance_name is None:
+            raise OptionsAlternativesNotPresent('instance_id', 'instance_name')
+        if options.devices is None and options.volume_name is None:
+            raise OptionsAlternativesNotPresent('devices', 'volume_name')
+        if options.region is None:
+            raise OptionNotPresent('region')
     # Optional parameters
     options.hourly = posint_or_default('hourly', options.hourly, 0)
     options.daily = posint_or_default('daily', options.daily, 7)
@@ -107,9 +121,11 @@ def main():
         print_usage_error(path.basename(__file__), e)
         exit(1)
     try:
-        task_clean_snapshots_ebs_id(args.volume_id, args.region, args.hourly,
-                                    args.daily, args.weekly, args.monthly,
-                                    args.dry, args.test, args.test_number)
+        task_clean_snapshots_ec2(args.region, args.instance_id,
+                                 args.instance_name, args.devices,
+                                 args.volume_name, args.hourly,
+                                 args.daily, args.weekly, args.monthly,
+                                 args.dry, args.test, args.test_number)
     except Exception as e:
         print_error(e)
         exit(2)

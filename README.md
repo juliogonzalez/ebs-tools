@@ -16,13 +16,25 @@ Allows to select which volumes are to be migrated, and will save tags or encrypt
 
 ### clean_snapshots
 
-To clean old EBS snapshots.
+To clean old EBS snapshots for a volume.
+
+Allows to save hourly, daily, weekly or monthly snapshots
+
+### clean_ec2_snapshots
+
+To clean old EBS snapshots for volumes attached to an instance.
 
 Allows to save hourly, daily, weekly or monthly snapshots
 
 ### make_snapshot
 
-To make an EBS snapshot
+To make an EBS snapshot for a volume
+
+### make_ec2_snapshots
+
+To make an EBS snapshot for a volume attached to an instance
+
+Allows to perform snapshots in parallel.
 
 Usage
 -----

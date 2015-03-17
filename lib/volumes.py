@@ -24,7 +24,8 @@ from exceptions import ErrorAttachingVolume, ErrorCreatingVolume
 from exceptions import ErrorDeletingVolume, ErrorDetachingVolume
 from exceptions import InvalidPIOPSRatio, InvalidPIOPSValue
 from exceptions import InvalidVolume, InvalidVolumeID, InvalidVolumeType
-from exceptions import NoMatchingVolumes, VolumeCreateTagError
+from exceptions import NoMatchingVolumesByDevice, NoMatchingVolumesByName
+from exceptions import NoVolumes, VolumeCreateTagError
 from exceptions import VolumeFetchError, VolumeNotAttached
 from re import compile
 from snapshots import get_snapshot_by_id
@@ -57,27 +58,21 @@ def get_volume_by_id(volume_id, region):
     return(volume)
 
 
-def getvolumes_from_instance(instance_id, devices, region):
-    """ Return all EBS volumes attached to an EC2 instance
+def get_volumes_from_instance_by_device(instance_id, devices, region):
+    """ Return all EBS volumes attached to an EC2 instance by device
 
     Args:
         instance_id: A string with the instance id to fetch
-        devices: A string with a regex to look for devices
+        devices: A string with a regex to look for volumes by device name
         region: A string with the AWS region where the instance and volumes are
     Returns:
         A list of boto.ec2.volume.Volume objects
     Raises:
-        VolumeFetchError: If there is an error fetching the volume list
         NoMatchingVolumes: If the regex doesn't match any volume
     """
-    conn = ec2conn(region)
-    expression = compile(devices)
-    try:
-        volumes = conn.get_all_volumes(
-            filters={'attachment.instance-id': '%s' % instance_id})
-    except Exception as e:
-        raise VolumeFetchError(e)
     matched_volumes = []
+    expression = compile(devices)
+    volumes = get_volumes_from_instance(instance_id, region)
     for volume in volumes:
         try:
             if expression.match(volume.attach_data.device):
@@ -86,7 +81,58 @@ def getvolumes_from_instance(instance_id, devices, region):
             pass
     if len(matched_volumes) > 0:
         return(matched_volumes)
-    raise NoMatchingVolumes(instance_id, devices)
+    raise NoMatchingVolumesByDevice(instance_id, devices)
+
+
+def get_volumes_from_instance_by_name(instance_id, name, region):
+    """ Return all EBS volumes attached to an EC2 instance by name (tag)
+
+    Args:
+        instance_id: A string with the instance id to fetch
+        name: A string with a regex to look for volumes by name
+        region: A string with the AWS region where the instance and volumes are
+        name: A string with a regex to look for volumes by name
+    Returns:
+        A list of boto.ec2.volume.Volume objects
+    Raises:
+        NoMatchingVolumes: If the regex doesn't match any volume
+    """
+    matched_volumes = []
+    expression = compile(name)
+    volumes = get_volumes_from_instance(instance_id, region)
+    for volume in volumes:
+        try:
+            if expression.match(volume.tags.get("Name")):
+                matched_volumes.append(volume)
+        except TypeError:
+            pass
+    if len(matched_volumes) > 0:
+        return(matched_volumes)
+    raise NoMatchingVolumesByName(instance_id, devices)
+
+
+def get_volumes_from_instance(instance_id, region):
+    """ Return all EBS volumes attached to an EC2 instance
+
+    Args:
+        instance_id: A string with the instance id to fetch volumes
+        region: A string with the AWS region where the instance and volumes are
+    Returns:
+        A list of boto.ec2.volume.Volume objects
+    Raises:
+        VolumeFetchError: If there is an error fetching the volume list
+        NoVolumes: If there are no volumes
+    """
+    conn = ec2conn(region)
+    try:
+        volumes = conn.get_all_volumes(
+            filters={'attachment.instance-id': '%s' % instance_id})
+    except Exception as e:
+        raise VolumeFetchError(e)
+    if len(volumes) > 0:
+        return(volumes)
+    else:
+        raise NoVolumes(instance_id)
 
 
 def check_iops_ratio(volume_id, piops, region):
@@ -264,6 +310,8 @@ def create_volume(region, dry, zone, size, vtype, piops=None, name=None,
     conn = ec2conn(region)
     if snapshot_id is not None:
         encrypted = get_snapshot_by_id(snapshot_id, region).encrypted
+    if vtype != "io1" and vtype != "gp2" and vtype != "standard":
+        raise InvalidVolumeType(vtype)
     try:
         if vtype == "io1":
             volume = conn.create_volume(size, zone, snapshot_id, "io1", piops,
@@ -271,16 +319,15 @@ def create_volume(region, dry, zone, size, vtype, piops=None, name=None,
         elif vtype == "standard" or vtype == "gp2":
             volume = conn.create_volume(size, zone, snapshot_id, vtype,
                                         encrypted=encrypted, dry_run=dry)
-        else:
-            raise InvalidVolumeType(vtype)
     except Exception as e:
         try:
             if 'DryRun flag is set' in e.body:
                 return(True)
         except:
-            raise ErrorCreatingVolume()
+            raise ErrorCreatingVolume(e)
     if volume.status == "error":
-        raise ErrorCreatingVolume()
+        raise ErrorCreatingVolume("Error creating volume: volume status is "
+                                  "error")
     while volume.status == "creating":
         sleep(15)
         volume.update(validate=True)

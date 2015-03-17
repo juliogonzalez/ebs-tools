@@ -142,7 +142,7 @@ class NoSnapshotsForVolume(Exception):
 class InvalidSnapshot(Exception):
 
     def __init__(self, snapshot_id):
-        self.snapshot = snapshot
+        self.snapshot_id = snapshot_id
 
     def __str__(self):
         return('Snapshot %s does not exist' % self.snapshot_id)
@@ -186,15 +186,35 @@ class InvalidVolumeType(Exception):
         return('Invalid Volume Type: %s' % self.vtype)
 
 
-class NoMatchingVolumes(Exception):
+class NoMatchingVolumesByDevice(Exception):
 
     def __init__(self, instance_id, devices):
         self.instance_id = instance_id
         self.devices = devices
 
     def __str__(self):
-        return('Regex \'%s\' does not match any volumes for instance %s'
+        return('Device regex \'%s\' does not match any volume for instance %s'
                % (self.devices, self.instance_id))
+
+
+class NoMatchingVolumesByName(Exception):
+
+    def __init__(self, instance_id, name):
+        self.instance_id = instance_id
+        self.name = name
+
+    def __str__(self):
+        return('Name regex \'%s\' does not match any volume for instance %s'
+               % (self.name, self.instance_id))
+
+
+class NoVolumes(Exception):
+    def __init__(self, instance_id):
+        self.instance_id = instance_id
+
+    def __str__(self):
+        return('There are no volumes for instance-id \'%s\''
+               % (self.instance_id))
 
 
 class InvalidPIOPSValue(Exception):
@@ -269,8 +289,11 @@ class ErrorDetachingVolume(Exception):
 
 class ErrorCreatingVolume(Exception):
 
+    def __init__(self, error):
+        self.error = error,
+
     def __str__(self):
-        return('Error creating volume')
+        return('Error creating volume: %s' % self.error)
 
 
 class ErrorAllVolumesSameType(Exception):

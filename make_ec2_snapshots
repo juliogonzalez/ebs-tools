@@ -20,9 +20,9 @@
 
 
 from lib.check import print_usage_error
-from lib.exceptions import OptionNotPresent
+from lib.exceptions import OptionNotPresent, OptionsAlternativesNotPresent
 from lib.messages import print_error, print_info, print_ok, print_warning
-from lib.tasks import task_create_snapshot_ebs_id
+from lib.tasks import task_create_snapshots_ec2
 from optparse import OptionParser
 from os import path
 
@@ -37,27 +37,46 @@ def parse_options():
         OptionNotPresent: If a mandatory option was not present
     """
     usage = "%prog <arguments>"
-    description = ('Tool to create EBS snapshots for a volume')
+    description = ('Tool to create EBS snapshots for one or more volumes for '
+                   'an instance')
     parser = OptionParser(usage=usage, description=description)
-    parser.add_option('--volume-id', action='store',
-                      help='EBS volume-id')
+    parser.add_option('--instance-id', action='store',
+                      help='EC2 instance-id')
+    parser.add_option('--instance_name', action='store',
+                      help='EC2 instance name')
+    parser.add_option('--devices', action='store',
+                      help='Attached devices to snapshot. Use regular'
+                           'expressions. For example /dev/sd[b-c] to catch'
+                           '/dev/sdb* and /dev/sdc*')
+    parser.add_option('--volume_name', action='store',
+                      help='Regular expression to select volumes to snapshot '
+                           'by name. For example volume1 to catch'
+                           'volume1*')
     parser.add_option('--region', action='store',
                       help='AWS Region where the volume is located')
     parser.add_option('--name', action='store',
-                      help='Name for the new snapshot [Optional, default will'
+                      help='Name for the new snapshots [Optional, default will'
                            ' be the volume name if available, or the volume ID'
                            ' otherwise]')
     parser.add_option('--description', action='store',
-                      help='Description for the new snapshot [Optional,'
+                      help='Description for the new snapshots [Optional,'
                            ' default will be instance name/ID and attachment'
                            ' info]')
+    parser.add_option('--parallel', action='store_false',
+                      help='Perform snapshots in parallel')
     parser.add_option('--dry', action='store_false',
                       help='Simulate functionality at AWS')
     (options, args) = parser.parse_args()
-    if options.volume_id is None:
-        raise OptionNotPresent('volume-id')
+    if options.instance_id is None and options.instance_name is None:
+        raise OptionsAlternativesNotPresent('instance_id', 'instance_name')
+    if options.devices is None and options.volume_name is None:
+        raise OptionsAlternativesNotPresent('devices', 'volume_name')
     if options.region is None:
         raise OptionNotPresent('region')
+    if options.parallel is None:
+        options.parallel = False
+    else:
+        options.parallel = True
     if options.dry is None:
         options.dry = False
     else:
@@ -72,8 +91,10 @@ def main():
         print_usage_error(path.basename(__file__), e)
         exit(1)
     try:
-        task_create_snapshot_ebs_id(args.volume_id, args.region, args.dry,
-                                    args.name, args.description)
+        task_create_snapshots_ec2(args.region, args.instance_id,
+                                  args.instance_name, args.parallel,
+                                  args.dry, args.devices, args.volume_name,
+                                  args.name, args.description)
     except Exception as e:
         print_error(e)
         exit(2)

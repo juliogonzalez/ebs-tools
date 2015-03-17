@@ -37,7 +37,7 @@ def get_instance_by_id(instance_id, region):
         A boto.ec2.instance.Instance object representing the instance
     Raises:
         InstanceFetchError: If there was an error fetching the instance
-        InstanceNotExists: If the instance does not exist
+        InvalidInstance: If the instance does not exist
     """
     conn = ec2conn(region)
     try:
@@ -50,8 +50,7 @@ def get_instance_by_id(instance_id, region):
             raise InvalidInstanceID(instance_id)
         else:
             raise InstanceFetchError(e)
-    except:
-        raise InstanceFetchError(e)
+    raise InvalidInstance(instance_name)
 
 
 def get_instance_by_name(instance_name, region):
@@ -65,7 +64,7 @@ def get_instance_by_name(instance_name, region):
         A boto.ec2.instance.Instance object representing the instance
     Raises:
         InstanceFetchError: If there was an error fetching the instance
-        InstanceNotExists: If the instance does not exist
+        InvalidInstance: If the instance does not exist
     """
     conn = ec2conn(region)
     try:
@@ -76,8 +75,9 @@ def get_instance_by_name(instance_name, region):
         for instance in reservation.instances:
             if instance.tags:
                 if instance.tags.get("Name") == instance_name:
-                    return(instance)
-    raise InstanceNotExists(instance_name)
+                    if instance.state != "terminated":
+                        return(instance)
+    raise InvalidInstance(instance_name)
 
 
 def get_instance_state(instance_id, region):
