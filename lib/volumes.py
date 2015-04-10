@@ -285,7 +285,8 @@ def create_volume_tag(volume_id, region, tagname, value):
 
 
 def create_volume(region, dry, zone, size, vtype, piops=None, name=None,
-                  tags=None, encrypted=False, snapshot_id=None):
+                  tags=None, encrypted=False, snapshot_id=None,
+                  savetags=False):
     """ Create an EBS volume (optionally from a snapshot
 
     Args:
@@ -332,10 +333,13 @@ def create_volume(region, dry, zone, size, vtype, piops=None, name=None,
         sleep(15)
         volume.update(validate=True)
     if tags is not None:
-        create_volume_tags(volume.id, region, tags)
-    try:
-        if tags['Name'] is None and name is not None:
-            create_volume_tag(volume.id, region, 'Name', name)
-    except:
-        pass
+        if savetags:
+            for tagkey, tagvalue in tags.iteritems():
+                if tagkey == 'Name' and name is not None:
+                    create_volume_tag(volume.id, region, 'Name', name)
+                else:
+                    create_volume_tag(volume.id, region, tagkey, tagvalue)
+        else:
+            if name is not None:
+                create_volume_tag(volume.id, region, 'Name', name)
     return(volume)

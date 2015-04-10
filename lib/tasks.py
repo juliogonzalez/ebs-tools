@@ -137,23 +137,28 @@ class Snapshot(Thread):
         dry: A boolean stating if the action is simulated or not
         name: A string with the name for the new snapshot (optional)
         description: A string with the value for the description
+        savetags: A boolean (True to copy tag volumes to snapshot, except
+                   Name)
     """
 
-    def __init__(self, volume_id, region, dry, volume_name, description):
+    def __init__(self, volume_id, region, dry, volume_name, description,
+                 savetags):
         Thread.__init__(self)
         self.volume_id = volume_id
         self.region = region
         self.dry = dry
         self.volume_name = volume_name
         self.description = description
+        self.savetags = savetags
 
     def run(self):
         task_create_snapshot_ebs_id(self.volume_id, self.region, self.dry,
-                                    self.volume_name, self.description)
+                                    self.volume_name, self.description,
+                                    self.savetags)
 
 
 def task_create_snapshot_ebs_id(volume_id, region, dry, name=None,
-                                description=None):
+                                description=None, savetags=False):
     """ Make a snapshot from a given volume-id
 
     Args:
@@ -162,6 +167,8 @@ def task_create_snapshot_ebs_id(volume_id, region, dry, name=None,
         dry: A boolean stating if the action is simulated or not
         name: A string with the name for the new snapshot (optional)
         description: A string with the value for the new tag
+        savetags: A boolean (True to copy tag volumes to snapshot, except
+                   Name)
     Returns:
         A string with the snapshots' ID or None for a dry run
     """
@@ -172,7 +179,7 @@ def task_create_snapshot_ebs_id(volume_id, region, dry, name=None,
     print_info("%sCreating snapshot for volume-id %s, description: %s..."
                % (drytext, volume_id, description))
     snapshot = create_snapshot_by_volume_id(volume_id, region, dry, name,
-                                            description)
+                                            description, savetags)
     if dry is True:
         snapshot_id = None
         print_ok("%sSnapshot was not created because dry flag is "
@@ -185,7 +192,8 @@ def task_create_snapshot_ebs_id(volume_id, region, dry, name=None,
 
 def task_create_snapshots_ec2(region, instance_id=None, instance_name=None,
                               parallel=False, dry=True, devices=None,
-                              volume_name=None, name=None, description=None):
+                              volume_name=None, name=None, description=None,
+                              savetags=False):
     """ Make a snapshots for volumes attached to an EC2 instance, by device or
         by tag name
 
@@ -199,6 +207,8 @@ def task_create_snapshots_ec2(region, instance_id=None, instance_name=None,
         volumename: A string with a regex to look for volumes by name
         name: A string with the name for the new snapshot (optional)
         description: A string with the value for the new tag
+        savetags: A boolean (True to copy tag volumes to snapshot, except
+                   Name)
     Returns:
         A string with the snapshots' ID or None for a dry run
     """
@@ -219,11 +229,12 @@ def task_create_snapshots_ec2(region, instance_id=None, instance_name=None,
         print_special("===================================")
     for volume in volumes:
         if parallel:
-            task = Snapshot(volume.id, region, dry, name, description)
+            task = Snapshot(volume.id, region, dry, name, description,
+                            savetags)
             task.start()
         else:
             task_create_snapshot_ebs_id(volume.id, region, dry, name,
-                                        description)
+                                        description, savetags)
     # Main thread
     if parallel:
         main_thread = currentThread()
@@ -248,9 +259,12 @@ class VolumeMigrate(Thread):
         volume: A boto.ec2.volume.Volume with the volume to change
         vtype: A string with the new volume type (io1|standard|gp2)
         newpiops: An integer with the new number of PIOPs (only when vtype=io1)
+        savetags: A boolean (True to copy tag volumes to snapshot, except
+                   Name)
     """
 
-    def __init__(self, region, dry, instance_id, volume, vtype, newpiops, tid):
+    def __init__(self, region, dry, instance_id, volume, vtype, newpiops, tid,
+                 savetags):
         Thread.__init__(self)
         self.region = region
         self.dry = dry
@@ -259,6 +273,7 @@ class VolumeMigrate(Thread):
         self.vtype = vtype
         self.newpiops = newpiops
         self.tid = tid
+        self.savetags = savetags
 
     def run(self):
         if self.dry is True:
@@ -284,7 +299,8 @@ class VolumeMigrate(Thread):
         # Perform Snapshot
         snapshot_id = task_create_snapshot_ebs_id(self.volume.id, self.region,
                                                   self.dry,
-                                                  description=description)
+                                                  description=description,
+                                                  savetags=self.savetags)
         if self.dry is False:
             print_info("%s%sWaiting for snapshot %s to be available..."
                        % (drytext, idtext, snapshot_id))
@@ -306,13 +322,13 @@ class VolumeMigrate(Thread):
                                     self.volume.zone, self.volume.size,
                                     self.vtype, self.newpiops, name,
                                     self.volume.tags, self.volume.encrypted,
-                                    snapshot_id)
+                                    snapshot_id, self.savetags)
         if self.vtype == "standard" or self.vtype == "gp2":
             nvolume = create_volume(self.volume.region, self.dry,
                                     self.volume.zone, self.volume.size,
                                     self.vtype, None, name,
                                     self.volume.tags, self.volume.encrypted,
-                                    snapshot_id)
+                                    snapshot_id, self.savetags)
         if self.dry is True:
             print_ok("%s%sVolume was not created because dry flag is enabled"
                      % (drytext, idtext))
@@ -383,7 +399,7 @@ def check_migration_logic(volumes, vtype, newpiops, region):
 
 
 def migrate_volumes(region, dry, devices, vtype, newpiops=None,
-                    instance_id=None, instance_name=None):
+                    instance_id=None, instance_name=None, savetags=False):
     """ Change type for all EBS volumes attached to an EC2 instance
 
     Args:
@@ -394,6 +410,8 @@ def migrate_volumes(region, dry, devices, vtype, newpiops=None,
         newpiops: An integer with the new number of PIOPs (only when vtype=io1)
         instance_id: A string with the instance-id where the volumes are
                      attached
+        savetags: A boolean (True to copy tag volumes to snapshot, except
+                   Name)
     Returns:
         True if all the volumes were migrated
     """
@@ -422,7 +440,7 @@ def migrate_volumes(region, dry, devices, vtype, newpiops=None,
     tid = 0
     for volume in volumes:
         task = VolumeMigrate(region, dry, instance.id, volume, vtype, newpiops,
-                             tid)
+                             tid, savetags)
         task.start()
         tid += 1
     # Main thread

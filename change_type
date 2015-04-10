@@ -57,6 +57,9 @@ def parse_options():
                       help='New volume type. <standard|gp2|io1>')
     parser.add_option('--piops', action='store',
                       help='Number of PIOPS (when --vtype=io1 was specified)')
+    parser.add_option('--savetags', action='store_false',
+                      help='When present, copy volume tags to the snapshots '
+                           '(except Name)')
     parser.add_option('--dry', action='store_false',
                       help='Just simulate at AWS [Optional]')
     (options, args) = parser.parse_args()
@@ -77,6 +80,10 @@ def parse_options():
         raise OptionNotPresent('piops')
     if options.vtype == 'io1' and options.piops is not None:
         options.pios = posint_or_default('piops', options.piops)
+    if options.savetags is None:
+        options.savetags = False
+    else:
+        options.savetags = True
     return(options)
 
 
@@ -88,7 +95,8 @@ def main():
         exit(1)
     try:
         migrate_volumes(args.region, args.dry, args.devices, args.vtype,
-                        args.piops, args.instanceid, args.instancename)
+                        args.piops, args.instanceid, args.instancename,
+                        args.savetags)
     except Exception as e:
         print_error(e)
         exit(2)

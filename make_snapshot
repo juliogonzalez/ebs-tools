@@ -51,6 +51,9 @@ def parse_options():
                       help='Description for the new snapshot [Optional,'
                            ' default will be instance name/ID and attachment'
                            ' info]')
+    parser.add_option('--savetags', action='store_false',
+                      help='When present, copy volume tags to the snapshots '
+                           '(except Name)')
     parser.add_option('--dry', action='store_false',
                       help='Simulate functionality at AWS')
     (options, args) = parser.parse_args()
@@ -58,6 +61,10 @@ def parse_options():
         raise OptionNotPresent('volume-id')
     if options.region is None:
         raise OptionNotPresent('region')
+    if options.savetags is None:
+        options.savetags = False
+    else:
+        options.savetags = True
     if options.dry is None:
         options.dry = False
     else:
@@ -73,7 +80,7 @@ def main():
         exit(1)
     try:
         task_create_snapshot_ebs_id(args.volume_id, args.region, args.dry,
-                                    args.name, args.description)
+                                    args.name, args.description, args.savetags)
     except Exception as e:
         print_error(e)
         exit(2)

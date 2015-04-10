@@ -12,7 +12,7 @@ Tools
 
 To change types of EBS volumes attached to an instance, in parallel.
 
-Allows to select which volumes are to be migrated, and will save tags or encryption if present.
+Allows to select which volumes are to be migrated, and will save encryption or tags (optionally) if present.
 
 ### clean_snapshots
 
@@ -28,11 +28,11 @@ Allows to save hourly, daily, weekly or monthly snapshots
 
 ### make_snapshot
 
-To make an EBS snapshot for a volume
+To make an EBS snapshot for a volume, optionally saving tags.
 
 ### make_ec2_snapshots
 
-To make an EBS snapshot for a volume attached to an instance
+To make an EBS snapshot for a volume attached to an instance, optionally saving tags.
 
 Allows to perform snapshots in parallel.
 

@@ -100,7 +100,7 @@ def create_snapshot_tag(snapshot, region, tagname, value):
 
 
 def create_snapshot_by_volume_id(volume_id, region, dry, name=None,
-                                 description=None):
+                                 description=None, savetags=False):
     """ Make a snapshot from a given volume-id
 
     Args:
@@ -109,6 +109,8 @@ def create_snapshot_by_volume_id(volume_id, region, dry, name=None,
         dry: A boolean stating if the action is simulated or not
         name: A string with the name for the new snapshot (optional)
         description: A string with the value for the description
+        savetags: A boolean (True to copy tag volumes to snapshot, except
+                   Name)
     Returns:
         A boto.ec2.snapshot.Snapshot object with the created snapshot or
         None if this was a dry run
@@ -150,6 +152,10 @@ def create_snapshot_by_volume_id(volume_id, region, dry, name=None,
             raise SnapshotCreateError(e)
     if dry is False:
         create_snapshot_tag(snapshot, region, "Name", name)
+        if savetags:
+            for tagkey, tagvalue in volume.tags.iteritems():
+                if tagkey != 'Name':
+                    create_snapshot_tag(snapshot, region, tagkey, tagvalue)
         return(snapshot)
     else:
         return(None)
