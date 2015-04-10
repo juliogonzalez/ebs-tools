@@ -135,7 +135,7 @@ class Snapshot(Thread):
         volume_id: A string with the EBS volume-id to create the snapshot
         region: A string with the AWS region where the volume is
         dry: A boolean stating if the action is simulated or not
-        name: A string with the name for the new snapshot (optional)
+        volume_name: A string with the name for the new snapshot (optional)
         description: A string with the value for the description
         savetags: A boolean (True to copy tag volumes to snapshot, except
                    Name)
