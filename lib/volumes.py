@@ -149,7 +149,7 @@ def check_iops_ratio(volume_id, piops, region):
         InvalidPIOPSRatio: If the ratio is invalid.
     """
     MIN_IOPS = 100
-    MAX_IOPS = 4000
+    MAX_IOPS = 20000
     MAX_RATIO = 30
     if int(piops) < MIN_IOPS or int(piops) > MAX_IOPS:
         raise InvalidPIOPSValue(piops)
