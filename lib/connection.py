@@ -19,7 +19,7 @@
 
 
 from boto import ec2
-from lib.exceptions import EC2ConnectError
+from exceptions import EC2ConnectError
 
 _ec2_connection = None
 
