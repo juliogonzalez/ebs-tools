@@ -154,7 +154,7 @@ def create_snapshot_by_volume_id(volume_id, region, dry, name=None,
         create_snapshot_tag(snapshot, region, "Name", name)
         if savetags:
             for tagkey, tagvalue in volume.tags.iteritems():
-                if tagkey != 'Name':
+                if tagkey != 'Name' and tagkey.split(':')[0] != 'aws':
                     create_snapshot_tag(snapshot, region, tagkey, tagvalue)
         return(snapshot)
     else:
