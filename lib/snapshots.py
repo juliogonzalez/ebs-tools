@@ -99,6 +99,26 @@ def create_snapshot_tag(snapshot, region, tagname, value):
     return(True)
 
 
+def create_snapshot_tags(snapshot, region, tags):
+    """ Create tags for the given snapshot
+
+    Args:
+        volume_id: A string with the snapshot-id for the snapshot
+        region: A string with the AWS region where the snapshot is
+        tags: A dict with names and values for the tags
+    Returns:
+        True if the operation succeeded
+    Raises:
+        SnapshotCreateTagError: If it was not possible to create the tag
+    """
+    try:
+        conn = ec2conn(region)
+        conn.create_tags(snapshot.id, tags)
+    except Exception as e:
+        raise SnapshotCreateTagError(e)
+    return(True)
+
+
 def create_snapshot_by_volume_id(volume_id, region, dry, name=None,
                                  description=None, savetags=False):
     """ Make a snapshot from a given volume-id
@@ -151,11 +171,12 @@ def create_snapshot_by_volume_id(volume_id, region, dry, name=None,
         except:
             raise SnapshotCreateError(e)
     if dry is False:
-        create_snapshot_tag(snapshot, region, "Name", name)
+        tags = dict(Name=name)
         if savetags:
             for tagkey, tagvalue in volume.tags.iteritems():
                 if tagkey != 'Name' and tagkey.split(':')[0] != 'aws':
-                    create_snapshot_tag(snapshot, region, tagkey, tagvalue)
+                    tags[tagkey] = tagvalue
+        create_snapshot_tags(snapshot, region, tags)
         return(snapshot)
     else:
         return(None)
