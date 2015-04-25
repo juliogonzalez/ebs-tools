@@ -1,7 +1,7 @@
 ebs-tools
 =========
 
-[![Build Status](http://jenkins-juliogonzalez.rhcloud.com/job/ebs-tools-build/badge/icon)](https://jenkins-juliogonzalez.rhcloud.com/job/ebs-tools-build/)
+[![Build Status](https://jenkins-juliogonzalez.rhcloud.com/job/ebs-tools-build/badge/icon)](https://jenkins-juliogonzalez.rhcloud.com/job/ebs-tools-build/)
 
 Tools to manage EBS volumes and snapshots
 
