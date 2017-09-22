@@ -352,10 +352,7 @@ def clean_snapshots_by_volume_id(volume_id, region, hourly_backups,
                     # If the snapshot is sunday, then the calculate previous
                     # sunday
                     if last_sunday.date() == snapshot_date.date():
-                        last_sunday = (snapshot_date -
-                                       timedelta(days=(snapshot_date.weekday()
-                                                       + 1)
-                                                 % 7 + 7))
+                        last_sunday = (snapshot_date - 1)
                     found = True
                     # To ignore more backups for the day, jump to the previous
                     # midnight
